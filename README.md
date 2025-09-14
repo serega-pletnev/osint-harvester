@@ -13,7 +13,7 @@
 
 ## Использование
 ```bash
-python3 json2html_ultra_max.py \
+python3 scripts/osint_harvester_max.py \
   -i ./examples/harvester_*.json \
   -o ./reports/index.html \
   --title "OSINT Report: example.com" \
@@ -35,5 +35,11 @@ IN_GLOB="${2:-./examples/*.json}"
 OUT="./reports/index.html"
 
 mkdir -p reports
-python3 ./json2html_ultra_max.py -i ${IN_GLOB} -o "${OUT}" --title "${TITLE}" --export-csv
+python3 python3 scripts/osint_harvester_max.py -i ${IN_GLOB} -o "${OUT}" --title "${TITLE}" --export-csv
 echo "Report saved to ${OUT}"
+
+---
+
+### CI / Pages
+[![Build & Deploy OSINT Report](https://github.com/serega-pletnev/osint-harvester/actions/workflows/build_pages.yml/badge.svg)](https://github.com/serega-pletnev/osint-harvester/actions/workflows/build_pages.yml)
+**Live:** https://serega-pletnev.github.io/osint-harvester/
