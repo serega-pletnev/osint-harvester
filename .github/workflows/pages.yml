@@ -2,19 +2,8 @@ name: Build & Deploy OSINT Report
 
 on:
   push:
-    branches: [ main ]
+    branches: ["main"]
   workflow_dispatch:
-    inputs:
-      person:
-        description: "Поисковый запрос по человеку (ФИО/ник/почта/телефон)"
-        required: false
-        default: ""
-      org:
-        description: "Поисковый запрос по организации/домену"
-        required: false
-        default: ""
-  schedule:
-    - cron: "23 3 * * 1"   # еженедельная пересборка по понедельникам 03:23 UTC
 
 permissions:
   contents: read
@@ -23,12 +12,11 @@ permissions:
 
 concurrency:
   group: "pages"
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,99 +26,25 @@ jobs:
         with:
           python-version: "3.x"
 
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: ${{ runner.os }}-pip-
-
-      - name: Install deps
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install -r requirements.txt
 
-      - name: Prepare dirs
+      - name: Ensure example input exists
         run: |
-          mkdir -p reports docs
-          echo "run_ts=$(date -u +%Y%m%d-%H%M%S)" | tee -a $GITHUB_ENV
+          mkdir -p examples docs
+          # если файла нет — положим минимальный пример, чтобы сборка не падала
+          test -f examples/harvester.json || cat > examples/harvester.json <<'JSON'
+          {"hosts":["example.com"],"ips":["93.184.216.34"],"sources":{"engine":"seed"}}
+          JSON
 
-      - name: Run person_search (optional)
-        env:
-          PERSON_Q: ${{ github.event.inputs.person }}
-          # Примеры API-ключей (создай в Settings → Secrets and variables → Actions)
-          HUNTER_API_KEY: ${{ secrets.HUNTER_API_KEY }}
-          SHODAN_API_KEY: ${{ secrets.SHODAN_API_KEY }}
-          CENSYS_API_ID: ${{ secrets.CENSYS_API_ID }}
-          CENSYS_API_SECRET: ${{ secrets.CENSYS_API_SECRET }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # автоматически доступен, но лучше явно
+      - name: Build report (HTML + CSV)
         run: |
-          set -e
-          if [ -n "${PERSON_Q}" ]; then
-            echo ">> Person query: ${PERSON_Q}"
-            python scripts/person_search.py \
-              --query "${PERSON_Q}" \
-              --json "reports/person_${{ env.run_ts }}.json" \
-              --csv  "reports/person_${{ env.run_ts }}.csv" \
-            || echo "person_search finished with non-zero (continue)"
-          else
-            echo "No person query provided — skip"
-          fi
-
-      - name: Run org_search (optional)
-        env:
-          ORG_Q: ${{ github.event.inputs.org }}
-          SHODAN_API_KEY: ${{ secrets.SHODAN_API_KEY }}
-          SECURITYTRAILS_API_KEY: ${{ secrets.SECURITYTRAILS_API_KEY }}
-          CENSYS_API_ID: ${{ secrets.CENSYS_API_ID }}
-          CENSYS_API_SECRET: ${{ secrets.CENSYS_API_SECRET }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -e
-          if [ -n "${ORG_Q}" ]; then
-            echo ">> Org query: ${ORG_Q}"
-            python scripts/org_search.py \
-              --query "${ORG_Q}" \
-              --json "reports/org_${{ env.run_ts }}.json" \
-              --csv  "reports/org_${{ env.run_ts }}.csv" \
-            || echo "org_search finished with non-zero (continue)"
-          else
-            echo "No org query provided — skip"
-          fi
-
-      - name: Copy reports into docs
-        run: |
-          cp -f reports/*.json docs/ 2>/dev/null || true
-          cp -f reports/*.csv  docs/ 2>/dev/null || true
-
-      - name: Build HTML report (index.html)
-        run: |
-          set -e
-          # Пытаемся использовать самый «жёсткий» конвертер, что ты добавил
-          if [ -f scripts/osint_harvester_max.py ]; then
-            python scripts/osint_harvester_max.py \
-              || echo "osint_harvester_max.py finished with non-zero (continue)"
-          fi
-
-          # Фолбэк: если index.html не появился — пробуем json2html_ultra_max.py
-          if [ ! -f docs/index.html ] && [ -f scripts/json2htm_ultra_max.py ]; then
-            python scripts/json2htm_ultra_max.py \
-              -i "./examples/*.json" \
-              -o "./docs/index.html" \
-              --title "OSINT theHarvester Report (GitHub Pages)" \
-              --export-csv \
-            || true
-          fi
-
-          # Фолбэк №2: если всё ещё нет index.html — создаём минимальный индекс
-          if [ ! -f docs/index.html ]; then
-            echo '<!doctype html><meta charset="utf-8"><title>OSINT Reports</title><h1>OSINT Reports</h1><ul>' > docs/index.html
-            for f in $(ls -1 docs/*.csv 2>/dev/null || true); do bn=$(basename "$f"); echo "<li><a href=\"${bn}\">${bn}</a></li>" >> docs/index.html; done
-            for f in $(ls -1 docs/*.json 2>/dev/null || true); do bn=$(basename "$f"); echo "<li><a href=\"${bn}\">${bn}</a></li>" >> docs/index.html; done
-            echo '</ul>' >> docs/index.html
-          fi
-
-          touch docs/.nojekyll
+          python3 scripts/osint_harvester_max.py \
+            -i examples/harvester.json \
+            -o docs/index.html \
+            --export-csv
 
       - name: Upload artifact for Pages
         uses: actions/upload-pages-artifact@v3
@@ -143,8 +57,10 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
