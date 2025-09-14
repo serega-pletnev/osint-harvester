@@ -1,9 +1,9 @@
 name: Build & Deploy OSINT Report
 
 on:
-  push:
-    branches: ["main"]
   workflow_dispatch:
+  push:
+    branches: [ "main" ]
 
 permissions:
   contents: read
@@ -26,41 +26,32 @@ jobs:
         with:
           python-version: "3.x"
 
-      - name: Install dependencies
+      - name: Install deps
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Ensure example input exists
-        run: |
-          mkdir -p examples docs
-          # если файла нет — положим минимальный пример, чтобы сборка не падала
-          test -f examples/harvester.json || cat > examples/harvester.json <<'JSON'
-          {"hosts":["example.com"],"ips":["93.184.216.34"],"sources":{"engine":"seed"}}
-          JSON
+          [ -f requirements.txt ] && pip install -r requirements.txt || true
 
       - name: Build report (HTML + CSV)
         run: |
+          mkdir -p docs
           python3 scripts/osint_harvester_max.py \
-            -i examples/harvester.json \
-            -o docs/index.html \
+            -i ./examples/*.json \
+            -o ./docs/index.html \
+            --title "OSINT theHarvester Report (GitHub Pages)" \
             --export-csv
 
       - name: Upload artifact for Pages
         uses: actions/upload-pages-artifact@v3
         with:
-          path: docs
+          path: ./docs
 
   deploy:
     needs: build
-    runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    permissions:
-      pages: write
-      id-token: write
+      url: ${{ steps.deploy.outputs.page_url }}
+    runs-on: ubuntu-latest
     steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
+      - id: deploy
         uses: actions/deploy-pages@v4
+
