@@ -1,3 +1,6 @@
+[![Build & Deploy](https://github.com/serega-pletnev/osint-harvester/actions/workflows/build_pages.yml/badge.svg)](https://github.com/serega-pletnev/osint-harvester/actions/workflows/build_pages.yml)  
+**Live:** https://serega-pletnev.github.io/osint-harvester/
+
 # OSINT Harvester Report
 
 Скрипт превращает JSON-вывод theHarvester в интерактивный HTML-отчёт:
