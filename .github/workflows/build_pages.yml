@@ -1,0 +1,75 @@
+name: Build & Deploy OSINT Report
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "json2html_*.py"
+      - "examples/**"
+      - ".github/workflows/build_pages.yml"
+      - "README.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: ${{ runner.os }}-pip-
+
+      # Если зависимостей нет — шаг ничего не сделает. Если решишь добавить (jinja2/xlsxwriter и т.п.),
+      # просто положи requirements.txt в корень.
+      - name: Install deps (optional)
+        if: hashFiles('requirements.txt') != ''
+        run: pip install -r requirements.txt
+
+      - name: Build docs
+        run: |
+          mkdir -p docs
+          # главный отчёт из всех json в examples/
+          python3 json2html_ultra_max.py \
+            -i "examples/*.json" \
+            -o docs/index.html \
+            --title "OSINT theHarvester Report" \
+            --export-csv
+          # чтобы обойти Jekyll
+          touch docs/.nojekyll
+
+      - name: Upload artifact for Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./docs
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
