@@ -1,4 +1,4 @@
-name: Build & Deploy report
+name: Build & Deploy OSINT Report
 
 on:
   push:
@@ -6,9 +6,14 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
+
+# Чтобы не было параллельных публикаций
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -21,32 +26,44 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: "3.x"
 
-      - name: Install deps (если у тебя есть requirements.txt — оставь, иначе пропустится)
+      - name: Install deps (optional)
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Build report (examples -> docs/index.html)
+      - name: Build docs
         run: |
           mkdir -p docs
-          python json2html_ultra_max.py \
+          # ВАЖНО: путь к скрипту. Если твой файл лежит в другом месте –
+          # поправь строку ниже (например, на `python3 json2htm_ultra_max.py`).
+          python3 scripts/json2htm_ultra_max.py \
             -i "./examples/*.json" \
-            -o ./docs/index.html \
-            --title "OSINT theHarvester Report: ${{ github.repository }}"
+            -o "./docs/index.html" \
+            --title "OSINT theHarvester Report" \
+            --export-csv
 
-      - name: Add .nojekyll (чтобы работали пути/подпапки)
-        run: |
+          # Положим примеры рядом (не обязательно)
+          cp -r examples docs/examples 2>/dev/null || true
+
+          # Отключаем Jekyll, чтобы не резались файлы с подчеркиванием
           touch docs/.nojekyll
 
-      - name: Commit docs to main
-        run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git add docs || true
-          git commit -m "Update report [skip ci]" || echo "No changes"
-          git push
+      - name: Upload artifact for Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
 
-  # опционально: можно собирать через Pages API, но у нас уже лежит файл в docs.
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
 
