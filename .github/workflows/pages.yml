@@ -1,0 +1,37 @@
+name: Build OSINT Report
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'examples/**'
+      - 'json2html_ultra_max.py'
+      - '.github/workflows/pages.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Build report
+        run: |
+          mkdir -p docs
+          python3 json2html_ultra_max.py \
+            -i "./examples/*.json" \
+            -o ./docs/index.html \
+            --title "OSINT theHarvester Report (GitHub Pages)" \
+            --export-csv
+
+      - name: Commit docs
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add docs
+          git commit -m "Update report" || echo "No changes"
+          git push
+

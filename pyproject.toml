@@ -1,0 +1,11 @@
+[project]
+name = "osint-harvester-report"
+version = "1.0.0"
+description = "JSON (theHarvester) -> interactive HTML report"
+requires-python = ">=3.8"
+readme = "README.md"
+authors = [{ name="Sergey Pletnev"}]
+license = { text = "MIT" }
+
+[project.scripts]
+harvest-report = "json2html_ultra_max:main"
