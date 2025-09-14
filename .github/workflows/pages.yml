@@ -1,56 +1,52 @@
-name: Build & Deploy OSINT Report
+name: Build & Deploy report
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
-      - name: Install deps (ignore if none)
+      - name: Install deps (если у тебя есть requirements.txt — оставь, иначе пропустится)
         run: |
           python -m pip install --upgrade pip
-          [ -f requirements.txt ] && pip install -r requirements.txt || true
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Build report (HTML + CSV)
+      - name: Build report (examples -> docs/index.html)
         run: |
           mkdir -p docs
-          python3 json2html_ultra_max.py \
+          python json2html_ultra_max.py \
             -i "./examples/*.json" \
-            -o "./docs/index.html" \
-            --title "OSINT theHarvester Report: example.com" \
-            --export-csv
+            -o ./docs/index.html \
+            --title "OSINT theHarvester Report: ${{ github.repository }}"
 
-      - name: Upload artifact for Pages
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./docs
+      - name: Add .nojekyll (чтобы работали пути/подпапки)
+        run: |
+          touch docs/.nojekyll
 
-  deploy:
-    needs: build
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
-    runs-on: ubuntu-latest
-    steps:
-      - id: deploy
-        uses: actions/deploy-pages@v4
+      - name: Commit docs to main
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add docs || true
+          git commit -m "Update report [skip ci]" || echo "No changes"
+          git push
+
+  # опционально: можно собирать через Pages API, но у нас уже лежит файл в docs.
+
