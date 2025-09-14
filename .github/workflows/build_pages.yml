@@ -2,13 +2,7 @@ name: Build & Deploy OSINT Report
 
 on:
   push:
-    branches: [ main ]
-    paths:
-      - "json2html_*.py"
-      - "examples/**"
-      - ".github/workflows/build_pages.yml"
-      - "README.md"
-  workflow_dispatch:
+    branches: [ "main" ]
 
 permissions:
   contents: read
@@ -22,40 +16,27 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
+          python-version: '3.x'
 
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-          restore-keys: ${{ runner.os }}-pip-
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          [ -f requirements.txt ] && pip install -r requirements.txt || true
 
-      # Если зависимостей нет — шаг ничего не сделает. Если решишь добавить (jinja2/xlsxwriter и т.п.),
-      # просто положи requirements.txt в корень.
-      - name: Install deps (optional)
-        if: hashFiles('requirements.txt') != ''
-        run: pip install -r requirements.txt
-
-      - name: Build docs
+      - name: Build report (HTML + CSV)
         run: |
           mkdir -p docs
-          # главный отчёт из всех json в examples/
-          python3 json2html_ultra_max.py \
-            -i "examples/*.json" \
-            -o docs/index.html \
-            --title "OSINT theHarvester Report" \
+          python3 scripts/osint_harvester_max.py \
+            -i "./examples/*.json" \
+            -o "./docs/index.html" \
+            --title "OSINT theHarvester Report (GitHub Pages)" \
             --export-csv
-          # чтобы обойти Jekyll
-          touch docs/.nojekyll
 
       - name: Upload artifact for Pages
         uses: actions/upload-pages-artifact@v3
@@ -69,7 +50,5 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
+      - id: deployment
         uses: actions/deploy-pages@v4
-
