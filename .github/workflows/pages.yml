@@ -1,37 +1,56 @@
-name: Build OSINT Report
+name: Build & Deploy OSINT Report
 
 on:
-  workflow_dispatch:
   push:
     branches: [ "main" ]
-    paths:
-      - 'examples/**'
-      - 'json2html_ultra_max.py'
-      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
-      - name: Build report
+      - name: Install deps (ignore if none)
+        run: |
+          python -m pip install --upgrade pip
+          [ -f requirements.txt ] && pip install -r requirements.txt || true
+
+      - name: Build report (HTML + CSV)
         run: |
           mkdir -p docs
           python3 json2html_ultra_max.py \
             -i "./examples/*.json" \
-            -o ./docs/index.html \
-            --title "OSINT theHarvester Report (GitHub Pages)" \
+            -o "./docs/index.html" \
+            --title "OSINT theHarvester Report: example.com" \
             --export-csv
 
-      - name: Commit docs
-        run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git add docs
-          git commit -m "Update report" || echo "No changes"
-          git push
+      - name: Upload artifact for Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./docs
 
+  deploy:
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
